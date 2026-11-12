@@ -1,0 +1,75 @@
+# Execute experiment variants in isolated worktrees
+
+Use this workflow when the user asks to implement, run, or compare model/code variants. Read current requirements, topic notes, the shared map, and project execution conventions first. Before implementation and launch, read [Technical specification](technical-spec.md), [Before training](before-training.md), [Metrics and comparison](metrics-and-comparison.md), and [Experiment map](experiment-map.md), focusing on the current variant’s definitions, logging, comparison, and provenance rules. Reuse these specifications rather than introducing another logging system.
+
+## Question, comparison, and budget
+
+State the research question, baseline, variant differences, comparable evaluation protocol, and intended observations in the topic note. Carry forward the user's authorized resources and scope: variants, seeds/repeats, updates or epochs, compute/time budget, concurrency, and stopping conditions. Resolve material missing choices once; do not add a new approval ceremony to every launch. A request to execute experiments normally includes routine branch/worktree creation and small checks needed for those experiments. Logging or map maintenance by itself does not authorize full training. If authorization covers preparation only, stop at the prepared, tested state and record it accurately.
+
+## Choose the isolation unit
+
+| Work | Code workspace | Execution identity |
+|---|---|---|
+| Independently developed code/model variants, including parallel agents editing code | Separate branch + worktree by default | Separate run for each actual execution |
+| Seeds or repeats of the same frozen code version | May reuse one worktree | Separate run, seed/config snapshot, and output directory each time |
+| Configuration sweep on fixed code | May reuse one worktree; resolve each configuration separately | Separate run, resolved configuration, and output directory for each trial |
+
+Reuse existing suitable worktrees. Follow project naming; absent a convention, use branches such as `codex/<study>-<variant>` and sibling worktrees under the agreed worktree root. Check existing branches/paths before creation, and give parallel agents exclusive ownership of their variant's editable tree. One run is not one worktree, and one branch name is not an immutable code version.
+
+Keep source used by a running job stable until it exits, including modules it may import lazily and local dependencies. Prepare the next changed variant elsewhere, or launch from a complete frozen execution copy whose paths/imports are verified. A startup archive for provenance alone does not isolate a process still reading the editable tree. A shared fixed-code worktree is suitable for concurrent runs only while no actor changes that code.
+
+## Preserve the actual starting state
+
+Identify the baseline repository and exact commit, relevant worktree status, and any staged, unstaged, or untracked training sources/configuration/local dependencies needed for the intended baseline. A clean `git worktree add -b <branch> <path> <baseline-commit>` starts from that commit; it does not include the user's dirty changes.
+
+When dirty changes belong to the requested starting state, preserve them outside the source tree as a versioned source snapshot plus staged/unstaged binary-capable patches and a manifest/copy of relevant untracked files. Materialize that state into the isolated tree, retaining file contents and deletions, and verify it against the captured starting state before variant edits. Record the baseline as commit **plus** snapshot/patch identity; do not call it a clean commit baseline. Do not stash, reset, or commit the user's source tree merely to create isolation. If it is unclear which dirty changes belong to the experiment, continue independent preparation and ask only about that selection.
+
+Capture the implemented variant separately at launch using the existing revision/source-snapshot convention. Preserve the source tree and baseline evidence even if later variant fixes produce another revision.
+
+## Implement, check, and launch
+
+Implement each planned difference in its assigned worktree, update the affected technical specification and metric definitions, and use the project's small tests or a bounded smoke run to check the real path. Distinguish such checks from the budgeted experiment runs. Run full experiments within the existing authorization after the checks pass; do not end with a plan when execution was requested and is possible.
+
+Verify isolation in the actual launcher environment, on the actual execution host: resolved working directory and entry point, interpreter, imported training/model/data modules (`__file__` or equivalent), local editable installs, and configuration paths. A new worktree with an interpreter or editable dependency pointing to another workspace is not isolated. Reuse an environment only when imports and mutable local dependencies resolve correctly; otherwise use a per-worktree environment or explicit local dependency paths and verify them. Record these observed locations with the launch command and revision, rather than assuming the shell's starting directory is sufficient.
+
+Read-only datasets and upstream checkpoints may be shared with recorded version identities. Give each run its own writable outputs, logs, checkpoints, temporary files, and mutable cache scope. Share a cache only when its keys include the relevant data/code/config identity and its writer/concurrency protocol is reliable; otherwise isolate it. Resolve relative paths against the actual launch directory and check that run outputs cannot overwrite a baseline, another run, or the shared journal. Do not rewrite a shared config file between concurrent trials; pass or save each resolved configuration independently.
+
+At actual startup, persist the execution/job identity, run ID when available, code/config/specification snapshots, input identities, output paths, and budget. Record `running` only from a real startup receipt; a submitted job may still be queued. Track failures and interruptions as observed. Keep training outcome separate from journal upload/rendering state as defined in [Before training](before-training.md).
+
+## Host memory budget and data caching
+
+Before constructing or launching an experiment, state how much **host RAM this run may occupy** and how much is available for caching, separately from GPU memory. For each host, record the user/job/container memory limit, current available RAM, other workload commitments, expected non-cache peak, and operating headroom. Include rank/worker copies, collation and prefetch queues, pinned buffers, and validation/checkpoint peaks. Resolve a concrete run budget and cache cap in GiB before preloading; dataset file size alone does not describe its decoded in-memory footprint. Save the measured budget and cache plan in `tracking.json.memory_cache` and the run snapshot.
+
+For GPU experiments, the default per-host RAM share is **`total_ram_gib * 0.95 * run_gpu_count / total_gpu_count`**. Record total physical host RAM, the host's total physical GPU count, and the GPUs allocated to this run on that host; do not use the process-visible GPU count as the denominator. Calculate each host separately. For example, 2 of 8 GPUs on a 512 GiB host gives a 121.6 GiB run share. Apply 95% before dividing among runs, so disjoint GPU allocations together budget at most 95% of host RAM. This is a ceiling for all of the run's ranks/workers on that host combined, not an amount to allocate per process or a target to fill.
+
+Constrain the actual run budget by user/job/container limits and available host capacity after accounting for other commitments. The user may explicitly override the proportional share; record the override and reason while respecting the host cap and resource limits. Derive **`cache_cap_gib = max(0, run_budget_gib - non_cache_peak_gib - headroom_gib)`**. Save both the calculated share and the final run/cache budgets so the next run can distinguish the default allocation from measured constraints or an override.
+
+Use the budget to reduce training I/O first: cache repeatedly used training data/features, using shared read-only storage, memory mapping/page cache, or bounded caches as appropriate. Avoid duplicating the whole dataset in every rank/worker; keep randomized augmentation under the training protocol and version deterministic cached preprocessing. When the dataset exceeds the budget, cache hot data and stream the rest in chunks. Keep enough headroom to avoid swapping or memory pressure that slows training.
+
+For routine validation, keep the fixed 10–20% subset described in [Metrics and comparison](metrics-and-comparison.md) resident, or preload it ahead of validation. Cache full important validation sets, such as OOD, only when there is sufficient RAM **and training has no remaining I/O bottleneck**. Cache residency and evaluation cadence are separate choices: a resident full set need not be evaluated every epoch. Background prefetch stays within the cache budget and must not compete away training throughput; full validation reuses resident data and reads only what is missing.
+
+During the representative short run and subsequent performance checks, sample host/job memory, available RAM, data-wait time or disk read rate, step time, and useful throughput alongside GPU utilization. Record actual cache footprint, preloading time, and before/after throughput. Keep raw measurements with the run; summarize the allowed/peak RAM, resident datasets/subset manifests, bottleneck, and selected strategy in Markdown. Prefer the strategy that improves measured throughput within the budget over allocating RAM merely to fill it.
+
+## GPU utilization: sample, improve, and record
+
+GPU training must include measured utilization. In principle, **each allocated GPU should exceed 90% time-weighted mean utilization during steady-state training**. This means GPU compute activity (for example, NVML / `nvidia-smi` `utilization.gpu`), not VRAM allocation or a peak reading. Also report the mean over the whole execution window, including validation and checkpoint saving; keep phases identifiable. Training data waits and distributed synchronization remain part of the training window.
+
+Before the budgeted run, use a representative bounded training trial with the intended model, data loading, precision, and per-device batch. After warmup, sample every **1 second for 120 seconds** by default. For a shorter authorized trial, retain the actual duration and sample count rather than claiming a full window. During training, sample every **5 seconds** by default; repeat the finer window after a performance-related configuration change or sustained low utilization. Reuse NVML, `nvidia-smi`, or existing monitoring, and verify its actual sampling interval and aggregation. Persist these choices under `tracking.json.gpu_utilization` and snapshot them per run.
+
+Collect all allocated devices on every host. Save timestamp, host, GPU UUID/device mapping, utilization %, used/total memory, and the run/process association; align samples with training phase and optimizer step where available. A shared device's total utilization cannot establish this run's utilization. Pair utilization with step time and useful throughput (samples/tokens/residues per second, with the unit recorded); investigate loading time, communication, and power/clock limits when they explain low utilization.
+
+Keep raw samples in the run directory as CSV/JSONL and link or upload them as an MLflow artifact. Log time series to MLflow using stable project system-metric keys (default `system/gpu/{device}/utilization_pct`, with a host-qualified device identity). For each GPU and phase/window, summarize duration, sample count, time-weighted mean, p10, and fraction of sampled time at or below 90%; an all-device average must not hide an idle card. Markdown retains the main utilization/throughput result, identified bottleneck, and before/after measurements, plus the raw-data path.
+
+Below target, locate the bottleneck, make a bounded adjustment, and resample under comparable conditions. Prioritize data loading/cache/prefetch, unnecessary host-device synchronization, operator execution, and load balance. Optimize useful throughput while preserving the experiment's meaning; changes to effective batch, precision, objective, or evaluation protocol are recorded experiment configuration changes. If still below target within the agreed budget, record the measured gap, cause, attempted adjustments, and chosen configuration for the user's next decision. Utilization is an execution-efficiency target, separate from the experiment's scientific outcome.
+
+## Code derivation and weight inheritance
+
+The source line/revision explains code derivation; it does not prove that its weights were loaded. Separately record the actual loaded checkpoint and parent run, initialization versus resume semantics, restored/reset model, optimizer, scheduler, step, and random state, and local/cumulative budget using the existing checkpoint convention. Explicitly record random initialization when applicable. Use research derivation/comparison edges for the variant relationship and `uses_model` dependencies for actual checkpoint use; retain both when both are evidenced.
+
+## One journal, real results, preserved history
+
+All worktrees use the same absolute `tracking.json.record_root`, MLflow tracking backend/experiment, evidence index, topic notes, and map. Keep this canonical root stable outside disposable experiment trees or otherwise explicitly preserve it. Do not let each worktree's tracked `experiments/` copy become an independent journal or point MLflow at different relative `mlruns` directories. Use a backend/storage arrangement supported for the expected concurrent writers.
+
+Write durable per-run events/metadata first. For shared JSON, Markdown, and diagram updates, use the project's single writer or a shared lock covering re-read, merge by stable IDs, atomic replacement, and rendering from the merged state. Merge distinct revisions/runs/events; do not overwrite a freshly updated map with a worker's stale whole-file copy. Preserve user notes and manual layout under the same update discipline. Reconcile pending events when background integration is unavailable; this needs no new scheduling framework.
+
+Maintain baseline → variant → revision/run associations in the [Experiment map](experiment-map.md). Append actual runs and revisions instead of replacing earlier trials. Compare measured results under the agreed protocol and budget, report incomplete trials honestly, then discuss interpretations with the user. Record findings and next decisions when the user asks to preserve them or has already settled them. Do not automatically merge or delete experimental branches/worktrees after comparison; record where each can be resumed. Check the delivered report and continuation links from each document’s actual location, including Markdown links copied from topic notes.

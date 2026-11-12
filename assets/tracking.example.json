@@ -1,0 +1,282 @@
+{
+  "schema_version": 1,
+  "tracking_uri": null,
+  "experiment_name": null,
+  "notes_language": "zh",
+  "record_root": null,
+  "maintenance": {
+    "proactive": true,
+    "map_formats": [
+      "excalidraw",
+      "markdown"
+    ],
+    "preserve_manual_layout": true,
+    "triggers": [
+      "requirements_changed",
+      "experiment_code_changed",
+      "technical_spec_changed",
+      "branch_changed",
+      "run_started",
+      "run_resumed",
+      "run_finished",
+      "artifact_changed",
+      "finding_recorded"
+    ],
+    "training_event_integration": null
+  },
+  "weighted_views": "auto",
+  "logging": {
+    "train_every_optimizer_steps": null,
+    "train_aggregation": null,
+    "validation": "complete_declared_scope",
+    "step_axis": "optimizer_updates",
+    "extra_progress": [
+      "epoch",
+      "samples_seen"
+    ]
+  },
+  "metric_dictionary": {
+    "schema_version": 1,
+    "losses": [
+      {
+        "name": "reconstruction/position",
+        "meaning": "Example: position reconstruction error; replace with the project's actual definition.",
+        "parent": "reconstruction",
+        "unit": null,
+        "mask_and_normalization": null,
+        "aggregation_denominator": null,
+        "weight": {
+          "config_key": null,
+          "includes_ancestor_weights": true
+        },
+        "source_variable": null,
+        "formula": null,
+        "implementation": null,
+        "definition_version": null,
+        "computed": true,
+        "logged": null
+      }
+    ],
+    "total_formula": null,
+    "datasets": [
+      "id",
+      "ood"
+    ],
+    "key_patterns": {
+      "train_raw": "train/raw/{loss}",
+      "train_weighted": "train/weighted/{loss}",
+      "validation_raw": "val/{dataset}/raw/{loss}",
+      "validation_weighted": "val/{dataset}/weighted/{loss}",
+      "quick_validation_raw": "val_quick/{dataset}/raw/{loss}",
+      "quick_validation_weighted": "val_quick/{dataset}/weighted/{loss}",
+      "objective": "train/objective"
+    }
+  },
+  "comparison_presets": [
+    {
+      "name": "variants",
+      "runs": "selected",
+      "metrics": [
+        "val/id/raw/total"
+      ],
+      "x": "step"
+    },
+    {
+      "name": "id_ood",
+      "runs": "single",
+      "metrics": [
+        "val/id/raw/{loss}",
+        "val/ood/raw/{loss}"
+      ],
+      "x": "step"
+    },
+    {
+      "name": "id_ood_across_variants",
+      "runs": "selected",
+      "metrics": [
+        "val/id/raw/{loss}",
+        "val/ood/raw/{loss}"
+      ],
+      "x": "step"
+    },
+    {
+      "name": "components",
+      "runs": "selected",
+      "metrics": "selected_components",
+      "x": "step"
+    },
+    {
+      "name": "weight_effect",
+      "runs": "selected",
+      "metrics": [
+        "train/raw/{loss}",
+        "train/weighted/{loss}"
+      ],
+      "x": "step"
+    }
+  ],
+  "code_snapshot": {
+    "include": [],
+    "exclude": [],
+    "capture_at": "training_start"
+  },
+  "checkpoints": {
+    "selection_metric": null,
+    "selection_mode": null,
+    "storage": null
+  },
+  "paths": {
+    "registry": "experiments/experiment-map.json",
+    "excalidraw": "experiments/experiment-map.excalidraw",
+    "overview": "experiments/experiment-map.md",
+    "notes": "experiments/notes",
+    "requirements": "experiments/requirements.md",
+    "outline": "experiments/initialization.md",
+    "evidence": "experiments/evidence.json"
+  },
+  "technical_specs": {
+    "data": null,
+    "model": null,
+    "objective": null,
+    "training_eval": null,
+    "capture_at": "training_start"
+  },
+  "loss_views": [
+    {
+      "name": "train_raw",
+      "metric_pattern": "train/raw/{loss}",
+      "levels": [
+        "total",
+        "group",
+        "leaf"
+      ],
+      "enabled": true
+    },
+    {
+      "name": "train_weighted",
+      "metric_pattern": "train/weighted/{loss}",
+      "levels": [
+        "total",
+        "group",
+        "leaf"
+      ],
+      "enabled": "weighted_views"
+    },
+    {
+      "name": "validation_raw",
+      "metric_pattern": "val/{dataset}/raw/{loss}",
+      "default_scope": "full",
+      "scope_patterns": {
+        "full": "val/{dataset}/raw/{loss}",
+        "quick": "val_quick/{dataset}/raw/{loss}"
+      },
+      "levels": [
+        "total",
+        "group",
+        "leaf"
+      ],
+      "enabled": true,
+      "paired_domains": [
+        "id",
+        "ood"
+      ]
+    },
+    {
+      "name": "validation_weighted",
+      "metric_pattern": "val/{dataset}/weighted/{loss}",
+      "default_scope": "full",
+      "scope_patterns": {
+        "full": "val/{dataset}/weighted/{loss}",
+        "quick": "val_quick/{dataset}/weighted/{loss}"
+      },
+      "levels": [
+        "total",
+        "group",
+        "leaf"
+      ],
+      "enabled": "weighted_views_and_defined_objective",
+      "paired_domains": [
+        "id",
+        "ood"
+      ]
+    }
+  ],
+  "memory_cache": {
+    "budget_policy": "gpu_proportional_per_host",
+    "host_memory_fraction_cap": 0.95,
+    "hosts": [
+      {
+        "host": null,
+        "total_ram_gib": null,
+        "total_gpu_count": null,
+        "run_gpu_count": null,
+        "calculated_share_gib": null,
+        "budget_override_gib": null,
+        "budget_override_reason": null,
+        "job_memory_limit_gib": null,
+        "available_ram_gib": null,
+        "run_budget_gib": null,
+        "non_cache_peak_gib": null,
+        "headroom_gib": null,
+        "cache_cap_gib": null
+      }
+    ],
+    "priority": "training_io_then_quick_validation_then_full_important_validation",
+    "training_strategy": null,
+    "quick_validation_strategy": "resident_or_preload",
+    "full_important_validation_cache": "only_with_ram_headroom_and_no_training_io_bottleneck",
+    "prefetch_limited_by_training_throughput": true,
+    "resident_manifests": [],
+    "measurement_artifact": null
+  },
+  "validation_policy": {
+    "planned_total_epochs": null,
+    "quick": {
+      "fraction_per_domain": 0.1,
+      "every_epochs": 1,
+      "sampling": "fixed_representative_stratified_subset",
+      "seed": null,
+      "manifests_by_domain": {}
+    },
+    "full": {
+      "interval_fraction_of_total_epochs": 0.025,
+      "rounding": "ceil",
+      "minimum_interval_epochs": 1,
+      "every_epochs": null,
+      "at_final": true,
+      "verify_reported_best_candidate": true
+    },
+    "schedule_unit": "epoch",
+    "early_stopping_metric_scope": null,
+    "scheduler_metric_scope": null,
+    "patience_unit": null
+  },
+  "gpu_utilization": {
+    "target_percent": 90,
+    "target_comparison": ">",
+    "target_scope": "per_device_steady_training_time_weighted_mean",
+    "preflight_sample_interval_seconds": 1,
+    "preflight_window_seconds": 120,
+    "training_sample_interval_seconds": 5,
+    "record_all_allocated_devices": true,
+    "record_phases": true,
+    "record_whole_execution_mean": true,
+    "raw_samples_format": "jsonl",
+    "metric_key_pattern": "system/gpu/{device}/utilization_pct",
+    "device_identity": "host_and_gpu_uuid",
+    "throughput_unit": null
+  },
+  "execution": {
+    "worktree_root": null,
+    "branch_pattern": "codex/{study}-{variant}",
+    "worktree_pattern": null,
+    "baseline_state_policy": null,
+    "active_source_policy": "stable_until_execution_exits",
+    "fixed_code_trials": "shared_worktree_separate_runs_configs_outputs",
+    "environment_import_check": null,
+    "run_output_root": null,
+    "cache_policy": null,
+    "resource_defaults": null,
+    "journal_update_method": null
+  }
+}

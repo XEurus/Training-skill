@@ -1,0 +1,6 @@
+interface:
+  display_name: "exp/experiment-journal"
+  short_description: "执行隔离的多模型变体实验，维护 MLflow 记录、实验发现与溯源图"
+  default_prompt: "使用 $mlflow-experiment-journal 明确研究问题与预算，隔离实现和执行模型变体，比较实际结果并维护共享日志与实验路径图。"
+policy:
+  allow_implicit_invocation: true
